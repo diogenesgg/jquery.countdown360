@@ -1,3 +1,11 @@
+/*
+ *  Countdown 360 - v0.1.9
+ *  This is a simple attractive circular countdown timer that counts down a number of seconds. The style is configurable and callbacks are supported on completion.
+ *  https://github.com/johnschult/jquery.countdown360
+ *
+ *  Made by John Schult
+ *  Under MIT License
+ */
 ;(function ($, window, document, undefined) {
   var pluginName = "countdown360",
     defaults = {
@@ -14,12 +22,17 @@
       label: ["second", "seconds"],    // the label to use or false if none
       startOverAfterAdding: true,      // Start the timer over after time is added with addSeconds
       smooth: false,                   // should the timer be smooth or stepping
-      onComplete: function () {}
+	  displayUnit: "sec",              // "sec" or "min"
+      onComplete: function () {},
+	  onZero: function() {}
     };
 
   function Plugin(element, options) {
     this.element = element;
     this.settings = $.extend({}, defaults, options);
+	if (this.settings.displayUnit === "min") {
+		this.settings.label = ["minute", "minutes"];
+	}
     if (!this.settings.fontSize) { this.settings.fontSize = this.settings.radius/1.2; }
     if (!this.settings.strokeWidth) { this.settings.strokeWidth = this.settings.radius/4; }
     this._defaults = defaults;
@@ -30,7 +43,6 @@
   Plugin.prototype = {
     getTimeRemaining: function()
     {
-    
       var timeRemaining = this._secondsLeft(this.getElapsedTime());
       return timeRemaining;
     },
@@ -58,8 +70,11 @@
 
     start: function () {
       this.startedAt = new Date();
-      this._drawCountdownShape(Math.PI*3.5, true);
-      this._drawCountdownLabel(0);
+	  this._drawCountdownShape(Math.PI*3.5, false);
+	  var timeNow = this._getTimeNow(this.settings.seconds);
+	  var endAngle = (Math.PI * 3.5) - (((Math.PI * 2) / 60) * (60 - timeNow));
+	  this._drawCountdownShape(endAngle, true);
+      this._drawCountdownLabel(timeNow);
       var timerInterval = 1000;
       if (this.settings.smooth) {
         timerInterval = 16;
@@ -109,11 +124,11 @@
       return this.settings.seconds - secondsElapsed;
     },
 
-    _drawCountdownLabel: function (secondsElapsed) {
-      this.ariaText.text(secondsLeft);
+    _drawCountdownLabel: function (timeNow) {
+      this.ariaText.text(timeLeft);
       this.pen.font         = this.settings.fontWeight + " " + this.settings.fontSize + "px " + this.settings.fontFamily;
-      var secondsLeft = this._secondsLeft(secondsElapsed),
-          label = secondsLeft === 1 ? this.settings.label[0] : this.settings.label[1],
+      var timeLeft = Math.floor(timeNow),
+          label = timeLeft === 1 ? this.settings.label[0] : this.settings.label[1],
           drawLabel = this.settings.label && this.settings.label.length === 2,
           x = this.settings.width/2;
       if (drawLabel) {
@@ -122,9 +137,9 @@
         y = this.settings.height/2;
       }
       this.pen.fillStyle = this.settings.fillStyle;
-      this.pen.fillText(secondsLeft + 1, x, y);
+      this.pen.fillText(timeLeft + 1, x, y);
       this.pen.fillStyle  = this.settings.fontColor;
-      this.pen.fillText(secondsLeft, x, y);
+      this.pen.fillText(timeLeft, x, y);
       if (drawLabel) {
         this.pen.font = "normal small-caps " + (this.settings.fontSize/3) + "px " + this.settings.fontFamily;
         this.pen.fillText(label, this.settings.width/2, this.settings.height/2 + (this.settings.fontSize/2.2));
@@ -139,23 +154,36 @@
       if (drawStroke) { this.pen.stroke(); }
     },
 
+	_getTimeNow: function(secondssLeft) {
+		if (this.settings.displayUnit === "sec") {
+	      var secsNow = (secondssLeft % 60);
+	      return secsNow;
+	    } else {
+	      var minNow = ((secondssLeft / 60.0) % 60);
+		  return minNow;
+	    }
+	},
+
     _draw: function () {
       var millisElapsed, secondsElapsed;
       millisElapsed = new Date().getTime() - this.startedAt.getTime();
-      secondsElapsed = Math.floor((millisElapsed)/1000);
-        endAngle = (Math.PI*3.5) - (((Math.PI*2)/(this.settings.seconds * 1000)) * millisElapsed);
+      secondsElapsed = ((millisElapsed)/1000.0) - 0.005;
+      var timeNow = this._getTimeNow(this.settings.seconds - secondsElapsed);
       this._clearRect();
-      this._drawCountdownShape(Math.PI*3.5, false);
+      this._drawCountdownShape(Math.PI * 3.5, false);
       if (secondsElapsed < this.settings.seconds) {
-        this._drawCountdownShape(endAngle, true);
-        this._drawCountdownLabel(secondsElapsed);
+        this._drawCountdownShape((Math.PI * 3.5) - (((Math.PI * 2) / 60) * (60 - timeNow)), true);
+        this._drawCountdownLabel(timeNow);
       } else {
-        this._drawCountdownLabel(this.settings.seconds);
+        this._drawCountdownLabel(0);
         this.stop();
         this.settings.onComplete();
       }
+	  if (Math.floor(timeNow) == 0 && !this.onZeroCalled) {
+		this.settings.onZero();
+		this.onZeroCalled = true;
+	  }
     }
-
   };
 
   $.fn[pluginName] = function (options) {
